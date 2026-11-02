@@ -1,6 +1,8 @@
+ 
 import { cekAdmin } from "../../../lib/cekAdmin";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 import LogoutButton from "../LogoutButton";
+import FormStatusPengiriman from "./FormStatusPengiriman";
 
 export const instant = false;
 
@@ -11,6 +13,17 @@ function rupiah(nilai: number) {
     maximumFractionDigits: 0,
   }).format(nilai);
 }
+
+const labelStatus: Record<string, string> = {
+  pesanan_diterima: "Pesanan diterima",
+  pesanan_diproses: "Pesanan diproses",
+  dikemas: "Sedang dikemas",
+  diserahkan_ke_kurir: "Diserahkan ke kurir",
+  dalam_perjalanan: "Dalam perjalanan",
+  telah_dikirim: "Telah dikirim",
+  telah_sampai: "Telah sampai",
+  pengiriman_gagal: "Pengiriman gagal",
+};
 
 export default async function HistoryPage() {
   await cekAdmin();
@@ -32,11 +45,10 @@ export default async function HistoryPage() {
   return (
     <main className="min-h-screen bg-[#f5f1e7] p-5 md:p-10">
       <div className="mx-auto max-w-7xl">
-
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-[#315b35]">
-              🍯 History Transaksi
+              Riwayat Transaksi
             </h1>
             <p className="mt-2 text-gray-600">
               Riwayat pembelian PT Madu Alam Asri
@@ -65,10 +77,11 @@ export default async function HistoryPage() {
         <section className="overflow-hidden rounded-xl bg-white shadow">
           <div className="border-b p-5">
             <h2 className="text-lg font-bold text-[#315b35]">
-              Daftar Pembeli
+              Daftar Pembeli dan Pengiriman
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Transaksi terbaru ditampilkan paling atas.
+              Admin dapat memperbarui status, kurir, nomor resi,
+              dan keterangan pengiriman setiap pesanan.
             </p>
           </div>
 
@@ -82,12 +95,12 @@ export default async function HistoryPage() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-left text-sm">
+              <table className="w-full min-w-[1500px] text-left text-sm">
                 <thead className="bg-[#edf2e9] text-[#315b35]">
                   <tr>
                     <th className="p-4">No.</th>
                     <th className="p-4">Tanggal</th>
-                    <th className="p-4">No. Resi</th>
+                    <th className="p-4">No. Pesanan</th>
                     <th className="p-4">Nama Pembeli</th>
                     <th className="p-4">WhatsApp</th>
                     <th className="p-4">Alamat</th>
@@ -95,7 +108,10 @@ export default async function HistoryPage() {
                     <th className="p-4">Ukuran</th>
                     <th className="p-4">Jumlah</th>
                     <th className="p-4">Total</th>
-                    <th className="p-4">Status</th>
+                    <th className="p-4">Status Pengiriman</th>
+                    <th className="p-4">Kurir</th>
+                    <th className="p-4">Nomor Resi</th>
+                    <th className="p-4">Pengaturan Pengiriman</th>
                   </tr>
                 </thead>
 
@@ -103,7 +119,7 @@ export default async function HistoryPage() {
                   {daftar.map((item, index) => (
                     <tr
                       key={item.id}
-                      className="border-t hover:bg-gray-50"
+                      className="border-t align-top hover:bg-gray-50"
                     >
                       <td className="p-4">{index + 1}</td>
 
@@ -131,7 +147,28 @@ export default async function HistoryPage() {
                         {rupiah(Number(item.total_harga))}
                       </td>
 
-                      <td className="p-4">{item.status}</td>
+                      <td className="p-4">
+                        {labelStatus[item.status_pengiriman] ||
+                          item.status_pengiriman ||
+                          "Belum diperbarui"}
+                      </td>
+
+                      <td className="p-4">
+                        {item.kurir || "-"}
+                      </td>
+
+                      <td className="p-4">
+                        {item.nomor_resi_kurir || "-"}
+                      </td>
+
+                      <td className="min-w-[280px] p-4">
+                        <FormStatusPengiriman
+                          pesananId={Number(item.id)}
+                          statusSaatIni={item.status_pengiriman}
+                          kurirSaatIni={item.kurir}
+                          nomorResiSaatIni={item.nomor_resi_kurir}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -139,7 +176,6 @@ export default async function HistoryPage() {
             </div>
           )}
         </section>
-
       </div>
     </main>
   );

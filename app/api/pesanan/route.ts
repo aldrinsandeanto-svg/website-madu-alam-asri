@@ -2,170 +2,196 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
+function buatNomorPesanan() {
+  const tanggal = new Date()
+    .toISOString()
+    .replace(/[-:TZ.]/g, "")
+    .slice(0, 14);
+
+  const acak = Math.floor(1000 + Math.random() * 9000);
+
+  return `MAA-${tanggal}-${acak}`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const {
-      nama_pelanggan,
-      no_whatsapp,
-      alamat,
-      nama_produk,
-      ukuran,
-      jumlah,
-      catatan,
-      metode_pembayaran,
-    } = body;
+    const nama = String(body.nama_pelanggan || "").trim();
+    const whatsapp = String(body.no_whatsapp || "").trim();
+    const alamat = String(body.alamat || "").trim();
+    const namaProduk = String(body.nama_produk || "").trim();
+    const ukuran = String(body.ukuran || "").trim();
+    const catatan = String(body.catatan || "").trim();
+    const metodePembayaran = String(
+      body.metode_pembayaran || "Transfer Bank"
+    ).trim();
 
-    // Validasi data pelanggan dan pesanan
+    const jumlah = Number(body.jumlah);
+
+    // Validasi data pelanggan
     if (
-      !nama_pelanggan ||
-      !no_whatsapp ||
+      !nama ||
+      !whatsapp ||
       !alamat ||
-      !nama_produk ||
-      !ukuran ||
-      !Number.isInteger(Number(jumlah)) ||
-      Number(jumlah) < 1
+      !namaProduk ||
+      !ukuran
     ) {
       return NextResponse.json(
-        { error: "Lengkapi data pelanggan dan pesanan dengan benar." },
+        { message: "Semua data wajib harus diisi." },
         { status: 400 }
       );
     }
 
-    const jumlahPesanan = Number(jumlah);
-    const metodePembayaran =
-      typeof metode_pembayaran === "string" && metode_pembayaran.trim()
-        ? metode_pembayaran.trim()
-        : "Transfer Bank";
+    if (
+      nama.length > 150 ||
+      whatsapp.length > 25 ||
+      !/^[0-9+\-\s()]+$/.test(whatsapp) ||
+      alamat.length > 2000 ||
+      catatan.length > 2000
+    ) {
+      return NextResponse.json(
+        { message: "Data pelanggan tidak valid." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(jumlah) ||
+      jumlah < 1 ||
+      jumlah > 100
+    ) {
+      return NextResponse.json(
+        { message: "Jumlah pesanan tidak valid." },
+        { status: 400 }
+      );
+    }
+
+    const metodeValid = [
+      "Transfer Bank",
+      "COD",
+      "QRIS",
+      "E-wallet DANA",
+      "E-wallet OVO",
+      "E-wallet GoPay",
+    ];
+
+    if (!metodeValid.includes(metodePembayaran)) {
+      return NextResponse.json(
+        { message: "Metode pembayaran tidak valid." },
+        { status: 400 }
+      );
+    }
 
     // Cari produk berdasarkan nama dan ukuran
-    const { data: produk, error: produkError } = await supabaseAdmin
-      .from("produk")
-      .select("id, nama_produk, ukuran, harga, stok, status")
-      .eq("nama_produk", nama_produk)
-      .eq("ukuran", ukuran)
-      .single();
+    const { data: produk, error: produkError } =
+      await supabaseAdmin
+        .from("produk")
+        .select("id, nama_produk, ukuran, harga, stok, status")
+        .eq("nama_produk", namaProduk)
+        .eq("ukuran", ukuran)
+        .maybeSingle();
 
     if (produkError || !produk) {
       return NextResponse.json(
-        { error: "Produk atau ukuran yang dipilih tidak ditemukan." },
+        { message: "Produk tidak ditemukan." },
         { status: 404 }
       );
     }
 
-    if (produk.status !== "tersedia") {
+    if (
+      produk.status !== "tersedia" ||
+      Number(produk.stok) < jumlah
+    ) {
       return NextResponse.json(
-        { error: "Produk sedang tidak tersedia." },
+        { message: "Stok produk tidak mencukupi." },
         { status: 400 }
       );
     }
 
-    if (Number(produk.stok) < jumlahPesanan) {
+    // Harga selalu diambil dari database
+    const harga = Number(produk.harga);
+    const total = harga * jumlah;
+
+    if (!Number.isFinite(harga) || harga <= 0) {
       return NextResponse.json(
-        { error: `Stok tidak cukup. Stok tersedia: ${produk.stok}.` },
+        { message: "Harga produk tidak valid." },
         { status: 400 }
       );
     }
 
-    const hargaSatuan = Number(produk.harga);
-    const totalHarga = hargaSatuan * jumlahPesanan;
+    // Kurangi stok dengan syarat stok masih mencukupi
+    const stokBaru = Number(produk.stok) - jumlah;
 
-    // Membuat nomor pesanan unik
-    const nomorPesanan =
-      "MAA-" +
-      new Date().toISOString().slice(0, 10).replace(/-/g, "") +
-      "-" +
-      Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data: stokUpdate, error: stokError } =
+      await supabaseAdmin
+        .from("produk")
+        .update({ stok: stokBaru })
+        .eq("id", produk.id)
+        .gte("stok", jumlah)
+        .select("id")
+        .maybeSingle();
+
+    if (stokError || !stokUpdate) {
+      return NextResponse.json(
+        { message: "Stok berubah atau sudah habis. Silakan coba lagi." },
+        { status: 409 }
+      );
+    }
+
+    // Buat nomor pesanan
+    const nomorPesanan = buatNomorPesanan();
 
     // Simpan pesanan
-    const { data: pesanan, error: pesananError } = await supabaseAdmin
-      .from("pesanan")
-      .insert({
-        nomor_pesanan: nomorPesanan,
-        nama_pelanggan: nama_pelanggan.trim(),
-        no_whatsapp: no_whatsapp.trim(),
-        alamat: alamat.trim(),
-        nama_produk: produk.nama_produk,
-        ukuran: produk.ukuran,
-        harga_satuan: hargaSatuan,
-        jumlah: jumlahPesanan,
-        total_harga: totalHarga,
-        catatan: catatan?.trim() || null,
-        metode_pembayaran: metodePembayaran,
-        status: "menunggu",
-        status_pengiriman: "pesanan_diterima",
-      })
-      .select()
-      .single();
+    const { data: pesanan, error: pesananError } =
+      await supabaseAdmin
+        .from("pesanan")
+        .insert({
+          nomor_pesanan: nomorPesanan,
+          nama_pelanggan: nama,
+          no_whatsapp: whatsapp,
+          alamat,
+          nama_produk: produk.nama_produk,
+          ukuran: produk.ukuran,
+          harga_satuan: harga,
+          jumlah,
+          total_harga: total,
+          catatan: catatan || null,
+          metode_pembayaran: metodePembayaran,
+        })
+        .select(
+          "nomor_pesanan, nama_pelanggan, no_whatsapp, alamat, nama_produk, ukuran, jumlah, total_harga, metode_pembayaran"
+        )
+        .single();
 
     if (pesananError || !pesanan) {
+      // Kembalikan stok jika penyimpanan pesanan gagal
+      await supabaseAdmin
+        .from("produk")
+        .update({ stok: Number(produk.stok) })
+        .eq("id", produk.id);
+
       console.error("Gagal menyimpan pesanan:", pesananError);
 
       return NextResponse.json(
-        { error: pesananError?.message || "Pesanan gagal disimpan." },
+        { message: "Gagal menyimpan pesanan." },
         { status: 500 }
-      );
-    }
-
-    // Buat riwayat pengiriman pertama
-    const { error: riwayatError } = await supabaseAdmin
-      .from("riwayat_pengiriman")
-      .insert({
-        pesanan_id: pesanan.id,
-        status: "pesanan_diterima",
-        keterangan: "Pesanan berhasil diterima dan tercatat oleh sistem.",
-        kurir: null,
-        nomor_resi: null,
-      });
-
-    // Jika riwayat gagal dibuat, batalkan penyimpanan pesanan
-    if (riwayatError) {
-      console.error("Gagal membuat riwayat pengiriman:", riwayatError);
-
-      const { error: hapusError } = await supabaseAdmin
-        .from("pesanan")
-        .delete()
-        .eq("id", pesanan.id);
-
-      if (hapusError) {
-        console.error("Gagal membatalkan pesanan:", hapusError);
-      }
-
-      return NextResponse.json(
-        { error: "Riwayat pengiriman gagal dibuat. Silakan coba kembali." },
-        { status: 500 }
-      );
-    }
-
-    // Kurangi stok setelah pesanan dan riwayat berhasil disimpan
-    const stokBaru = Number(produk.stok) - jumlahPesanan;
-
-    const { error: stokError } = await supabaseAdmin
-      .from("produk")
-      .update({ stok: stokBaru })
-      .eq("id", produk.id);
-
-    if (stokError) {
-      console.error(
-        "Pesanan tersimpan, tetapi stok gagal diperbarui:",
-        stokError
       );
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: "Pesanan berhasil dicatat.",
-        data: pesanan,
+        message: "Pesanan berhasil dibuat.",
+        pesanan,
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Kesalahan API pesanan:", error);
+    console.error("Kesalahan API pemesanan:", error);
 
     return NextResponse.json(
-      { error: "Terjadi kesalahan pada server saat mencatat pesanan." },
+      { message: "Terjadi kesalahan pada server." },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
  
 import { Suspense } from "react";
 import { connection } from "next/server";
+import Link from "next/link";
 import { supabaseAdmin } from "../lib/supabaseAdmin";
 import FormPemesanan from "./komponen/FormPemesanan";
 
@@ -36,10 +37,23 @@ export default function HomePage() {
             </span>
           </a>
 
-          <nav className="flex flex-wrap gap-5 text-sm font-medium">
-            <a href="#beranda">Beranda</a>
-            <a href="#tentang">Tentang Kami</a>
-            <a href="#pemesanan">Pemesanan</a>
+          <nav className="flex flex-wrap items-center gap-5 text-sm font-medium">
+            <a href="#beranda" className="hover:text-[#a8794b]">
+              Beranda
+            </a>
+            <a href="#tentang" className="hover:text-[#a8794b]">
+              Tentang Kami
+            </a>
+            <a href="#pemesanan" className="hover:text-[#a8794b]">
+              Pemesanan
+            </a>
+
+            <Link
+              href="/cek-pesanan"
+              className="rounded-full bg-[#315b35] px-5 py-2.5 font-semibold text-white transition hover:bg-[#24472a]"
+            >
+              📦 Cek Pesanan
+            </Link>
           </nav>
         </div>
       </header>
@@ -64,12 +78,21 @@ export default function HomePage() {
               dengan mudah melalui website kami.
             </p>
 
-            <a
-              href="#pemesanan"
-              className="mt-8 inline-block rounded-full bg-[#75451f] px-8 py-3 font-semibold text-white hover:bg-[#59371f]"
-            >
-              Pesan Sekarang
-            </a>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <a
+                href="#pemesanan"
+                className="inline-block rounded-full bg-[#75451f] px-8 py-3 font-semibold text-white transition hover:bg-[#59371f]"
+              >
+                Pesan Sekarang
+              </a>
+
+              <Link
+                href="/cek-pesanan"
+                className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#315b35] px-8 py-3 font-semibold text-[#315b35] transition hover:bg-[#315b35] hover:text-white"
+              >
+                📦 Cek Pesanan
+              </Link>
+            </div>
           </div>
 
           <div className="flex min-h-64 items-center justify-center rounded-2xl bg-[#e2d1b9]">
