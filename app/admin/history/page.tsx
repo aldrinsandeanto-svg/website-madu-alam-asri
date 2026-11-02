@@ -2,7 +2,6 @@ import { cekAdmin } from "../../../lib/cekAdmin";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 import LogoutButton from "../LogoutButton";
 
-
 function rupiah(nilai: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
